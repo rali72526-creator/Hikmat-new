@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-urdu: "Noto Nastaliq Urdu", serif;
+}
+
+/* Add some custom styling for the markdown output to use the Urdu font */
+.prose {
+  font-family: var(--font-urdu), var(--font-sans);
+  line-height: 2.2;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  font-family: var(--font-urdu), var(--font-sans);
+  line-height: 1.8;
+  margin-bottom: 1rem;
+}
+
+.prose p {
+  margin-bottom: 1.2rem;
+}
+
+.prose ul, .prose ol {
+  padding-right: 1.5rem; /* RTL padding */
+  padding-left: 0;
+}
+
+.prose li {
+  margin-bottom: 0.5rem;
+}
