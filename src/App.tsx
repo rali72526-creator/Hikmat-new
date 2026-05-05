@@ -3,13 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Leaf, Stethoscope, Search, Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Leaf, Stethoscope, Search, Loader2, AlertCircle, Lock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getTreatment, analyzeRemedy } from './services/gemini';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
   const [activeTab, setActiveTab] = useState<'treatment' | 'remedy'>('treatment');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -23,6 +30,66 @@ export default function App() {
   // Form State - Remedy
   const [remedyInput, setRemedyInput] = useState('');
 
+  useEffect(() => {
+    const checkAuth = async () => {
+      const savedUsername = localStorage.getItem('admin_username');
+      const savedPassword = localStorage.getItem('admin_password');
+      if (savedUsername && savedPassword) {
+        try {
+          const res = await fetch('/api/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: savedUsername, password: savedPassword })
+          });
+          if (res.ok) {
+            setIsAuthenticated(true);
+          } else {
+            localStorage.removeItem('admin_username');
+            localStorage.removeItem('admin_password');
+          }
+        } catch (e) {
+          console.error("Auth check failed", e);
+        }
+      }
+      setIsCheckingAuth(false);
+    };
+    checkAuth();
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    setLoginError('');
+    
+    try {
+      const res = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loginUsername, password: loginPassword })
+      });
+      
+      if (res.ok) {
+        localStorage.setItem('admin_username', loginUsername);
+        localStorage.setItem('admin_password', loginPassword);
+        setIsAuthenticated(true);
+      } else {
+        setLoginError('Incorrect username or password. Please try again.');
+      }
+    } catch (e) {
+      setLoginError('Server error. Please try again later.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('admin_username');
+    localStorage.removeItem('admin_password');
+    setIsAuthenticated(false);
+    setResult(null);
+    setError(null);
+  };
+
   const handleTreatmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!age || !city || !condition) return;
@@ -34,9 +101,13 @@ export default function App() {
     try {
       const response = await getTreatment(age, city, condition);
       setResult(response || "No response received.");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("An error occurred while fetching the treatment. Please try again.");
+      if (err.message === 'Unauthorized') {
+        handleLogout();
+      } else {
+        setError("An error occurred while fetching the treatment. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -53,18 +124,93 @@ export default function App() {
     try {
       const response = await analyzeRemedy(remedyInput);
       setResult(response || "No response received.");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("An error occurred while analyzing the remedy. Please try again.");
+      if (err.message === 'Unauthorized') {
+        handleLogout();
+      } else {
+        setError("An error occurred while analyzing the remedy. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-[#f8f5f0] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-[#2d4a22]" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#f8f5f0] flex items-center justify-center p-4 selection:bg-[#2d4a22] selection:text-white">
+        <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-200 w-full max-w-md">
+          <div className="flex flex-col items-center text-center mb-8">
+            <div className="bg-[#d4af37] p-4 rounded-full mb-4 shadow-md">
+              <Lock className="w-8 h-8 text-[#2d4a22]" />
+            </div>
+            <h1 className="text-2xl font-bold font-serif text-[#2d4a22]">Admin Login</h1>
+            <p className="text-slate-500 mt-2">Please enter the admin password to access Tibb-e-Luqman AI.</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Username</label>
+              <input
+                type="text"
+                required
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                placeholder="Enter username"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#2d4a22] focus:border-[#2d4a22] outline-none transition-all bg-slate-50"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+              <input
+                type="password"
+                required
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="Enter password"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#2d4a22] focus:border-[#2d4a22] outline-none transition-all bg-slate-50"
+              />
+            </div>
+
+            {loginError && (
+              <div className="bg-red-50 text-red-700 p-3 rounded-xl flex items-start gap-2 text-sm">
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <p>{loginError}</p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="w-full bg-[#2d4a22] hover:bg-[#233a1a] text-white font-bold py-3.5 px-6 rounded-xl transition-colors shadow-sm disabled:opacity-70 flex justify-center items-center gap-2"
+            >
+              {loginLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Login'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f8f5f0] text-slate-800 font-sans selection:bg-[#2d4a22] selection:text-white pb-12">
       {/* Header */}
-      <header className="bg-[#2d4a22] text-[#f8f5f0] py-8 px-4 shadow-lg border-b-4 border-[#d4af37]">
+      <header className="bg-[#2d4a22] text-[#f8f5f0] py-8 px-4 shadow-lg border-b-4 border-[#d4af37] relative">
+        <button 
+          onClick={handleLogout}
+          className="absolute top-4 right-4 text-sm bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors"
+        >
+          Logout
+        </button>
         <div className="max-w-4xl mx-auto flex flex-col items-center text-center">
           <div className="bg-[#d4af37] p-3 rounded-full mb-4 shadow-md">
             <Leaf className="w-8 h-8 text-[#2d4a22]" />
